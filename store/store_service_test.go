@@ -1,70 +1,33 @@
 package store
 
 import (
-	"context"
-	"fmt"
-	"github.com/go-redis/redis/v8"
-	"time"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
-// Define the struct wrapper around raw Redis client
-type StorageService struct {
-	redisClient *redis.Client
+//Setting Up the tests shell
+var testStoreService = &StorageService{}
+
+func init() {
+	testStoreService = InitializeStore()
 }
 
-// Top level declarations for the storeService and Redis context
-var (
-	storeService = &StorageService{}
-	ctx          = context.Background()
-)
-
-// Note that in a real world usage, the cache duration shouldn't have
-// an expiration time, an LRU policy config should be set where the
-// values that are retrieved less often are purged automatically from
-// the cache and stored back in RDBMS whenever the cache is full
-
-const CacheDuration = 6 * time.Hour
-
-// Initializing the store service and return a store pointer
-func InitializeStore() *StorageService {
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-	})
-
-	pong, err := redisClient.Ping(ctx).Result()
-	if err != nil {
-		panic(fmt.Sprintf("Error init Redis: %v", err))
-	}
-
-	fmt.Printf("\nRedis started successfully: pong message = {%s}", pong)
-	storeService.redisClient = redisClient
-	return storeService
+//Go on and unit test the store service initialization
+func TestStoreInit(t *testing.T) {
+	assert.True(t, testStoreService.redisClient != nil)
 }
 
-/* We want to be able to save the mapping between the originalUrl
-and the generated shortUrl url
-*/
+//Add tests for the storage APIs
+func TestInsertionAndRetrieval(t *testing.T) {
+	initialLink := "https://www.guru3d.com/news-story/spotted-ryzen-threadripper-pro-3995wx-processor-with-8-channel-ddr4,2.html"
+	userUUId := "e0dba740-fc4b-4977-872c-d360239e6b1a"
+	shortURL := "Jsz4k57oAX"
 
-func SaveUrlMapping(shortUrl string, originalUrl string, userId string) {
-	err := storeService.redisClient.Set(ctx, shortUrl, originalUrl, CacheDuration).Err()
-	if err != nil {
-		panic(fmt.Sprintf("Failed saving key url | Error: %v - shortUrl: %s - originalUrl: %s\n", err, shortUrl, originalUrl))
-	}
-}
+	// Persist data mapping
+	SaveUrlMapping(shortURL, initialLink, userUUId)
 
-/*
-We should be able to retrieve the initial long URL once the short
-is provided. This is when users will be calling the shortlink in the
-url, so what we need to do here is to retrieve the long url and
-think about redirect.
-*/
+	// Retrieve initial URL
+	retrievedUrl := RetrieveInitialUrl(shortURL)
 
-func RetrieveInitialUrl(shortUrl string) string {
-	result, err := storeService.redisClient.Get(ctx, shortUrl).Result()
-	if err != nil {
-		panic(fmt.Sprintf("Failed RetrieveInitialUrl url | Error: %v - shortUrl: %s\n", err, shortUrl))
-	}
-	return result
+	assert.Equal(t, initialLink, retrievedUrl)
 }
